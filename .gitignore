@@ -21,3 +21,6 @@ ios/DerivedData/
 xcuserdata/
 
 .DS_Store
+
+# Local family tokens (never commit)
+family-tokens.local.json

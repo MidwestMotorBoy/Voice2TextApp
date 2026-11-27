@@ -22,19 +22,21 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 
 ## Known unknowns (verify, don't assume)
 
-- xAI speech-to-text REST request format: path (`/v1/stt`?), multipart field name (`file`?), model name.
-  Check https://docs.x.ai/developers/rest-api-reference/inference/voice before relying on `worker/src/index.js`.
-- The Worker code in this repo was written but never run. Treat it as a draft to test.
+- xAI speech-to-text format was checked against the docs on 2026-11-27 (`POST /v1/stt`, multipart,
+  `file` last, no `model` field, response has `text` and `duration`). The Bearer auth header is
+  inferred from xAI's other endpoints, and nothing has been tried with a real key yet.
+- The Worker passes `npm test` (fake Grok and Claude) but has never run against the real APIs or been deployed.
 
 ## Working style
 
-- One phase at a time: Worker → Android keyboard → iPhone Stage 1 → iPhone keyboard extension.
+- One phase at a time: Worker → iPhone Stage 1 → Android keyboard → iPhone keyboard extension.
 - Each phase ends with something testable on a real device or via curl.
 
 ## Commands
 
 Worker (from `worker/`):
 - `npm install` — installs wrangler locally
+- `npm test` — runs the Worker against fake Grok and Claude, no keys needed
 - `npx wrangler dev` — run locally (put test secrets in `worker/.dev.vars`, gitignored)
 - `scripts/test-dictate.sh <audio.m4a>` — POST a recording to the Worker
 - `npx wrangler deploy` — deploy

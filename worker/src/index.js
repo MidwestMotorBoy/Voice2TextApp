@@ -2,10 +2,10 @@
 // POST /dictate  (Authorization: Bearer <family token>, body = audio bytes)
 // -> { text: "<cleaned>", raw: "<transcript>" }
 //
-// Verify against docs.x.ai before deploying: the STT path, the
-// multipart field name ("file") and the model name.
+// STT request format checked against
+// https://docs.x.ai/developers/rest-api-reference/inference/voice (Nov 2026):
+// multipart POST, no model field, and "file" must be the last form field.
 const STT_URL = "https://api.x.ai/v1/stt";
-const STT_MODEL = "grok-voice-transcribe-2.0";
 const CLAUDE_MODEL = "claude-haiku-5-5";
 const MAX_BYTES = 10 * 1024 * 1024; // ~10 min of AAC audio
 
@@ -59,18 +59,26 @@ export default {
 
     // 3. Speech -> text (Grok)
     const form = new FormData();
+    // Add any other fields above this line: xAI requires "file" to be last.
     form.append("file", new Blob([audio], { type }), "dictation.m4a");
-    form.append("model", STT_MODEL);
-    const stt = await fetch(STT_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${env.XAI_API_KEY}` },
-      body: form,
-    });
-    if (!stt.ok) {
-      return json({ error: "transcription failed", detail: await stt.text() }, 502);
+    let sttData;
+    try {
+      const stt = await fetch(STT_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.XAI_API_KEY}` },
+        body: form,
+      });
+      if (!stt.ok) {
+        return json({ error: "transcription failed", detail: await stt.text() }, 502);
+      }
+      sttData = await stt.json();
+    } catch {
+      return json({ error: "transcription failed" }, 502);
     }
-    const raw = ((await stt.json()).text || "").trim();
+    const raw = (sttData.text || "").trim();
     if (!raw) return json({ text: "", raw: "" });
+    // Prefer the duration Grok measured over the one the app reported.
+    const billed = Math.ceil(Number(sttData.duration)) || seconds;
 
     // 4. Clean up (Claude). If it fails, fall back to the raw transcript.
     let text = raw;
@@ -100,7 +108,7 @@ export default {
     }
 
     // 5. Count usage (kept ~70 days, then expires)
-    await env.USAGE.put(usageKey, String(used + seconds), {
+    await env.USAGE.put(usageKey, String(used + billed), {
       expirationTtl: 60 * 60 * 24 * 70,
     });
 

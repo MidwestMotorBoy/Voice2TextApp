@@ -1,0 +1,23 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+*.m4a
+*.wav
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.keystore
+*.jks
+
+# iOS
+ios/build/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/
+
+.DS_Store

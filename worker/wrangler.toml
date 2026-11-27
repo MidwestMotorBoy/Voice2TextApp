@@ -1,0 +1,14 @@
+name = "family-dictation"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+# Create with: npx wrangler kv namespace create USAGE
+# then paste the printed id below.
+[[kv_namespaces]]
+binding = "USAGE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Secrets (never put these in this file):
+#   npx wrangler secret put XAI_API_KEY
+#   npx wrangler secret put ANTHROPIC_API_KEY
+#   npx wrangler secret put FAMILY_TOKENS   # JSON: {"<token>": {"name": "dad", "capSeconds": 36000}}

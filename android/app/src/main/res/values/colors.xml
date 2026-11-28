@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="keyboard_background">#ECEFF1</color>
+    <color name="key_background">#FFFFFF</color>
+    <color name="key_text">#1C1C1E</color>
+    <color name="status_text">#1C1C1E</color>
+    <color name="status_error">#C62828</color>
+    <color name="mic_idle">#0A84FF</color>
+    <color name="mic_listening">#E53935</color>
+    <color name="mic_busy">#8E8E93</color>
+</resources>

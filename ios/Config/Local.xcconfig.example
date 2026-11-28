@@ -1,0 +1,9 @@
+// Copy this file to ios/Local.xcconfig and fill in your own values.
+// ios/Local.xcconfig is gitignored: never commit real identifiers to this public repo.
+//
+// DEVELOPMENT_TEAM: your 10-character Apple team ID (Xcode > Settings > Accounts, or developer.apple.com > Membership).
+// APP_BUNDLE_ID: any reverse-domain id that is unique to you.
+// APP_GROUP_ID: "group." followed by the same id.
+DEVELOPMENT_TEAM = ABCDE12345
+APP_BUNDLE_ID = com.yourname.familydictation
+APP_GROUP_ID = group.com.yourname.familydictation

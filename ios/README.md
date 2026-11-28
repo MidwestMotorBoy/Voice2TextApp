@@ -1,45 +1,67 @@
 # iPhone app
 
-Stage 1 is built: one big record button, the result copied to the clipboard, and a "Dictate" App Intent
-for the Action Button. Stage 2 (keyboard extension) is not started. See "iPhone app" in `../docs/plan.md`.
+Stage 1 and Stage 2 are built: a record button with the result copied to the clipboard, a "Dictate"
+App Intent for the Action Button, and a Dictate keyboard that types the result into any app.
+See "iPhone app" in `../docs/plan.md`.
+
+## How the keyboard works
+
+iOS keyboards are not allowed to use the microphone, so the keyboard and the app work together:
+
+1. Tap the mic on the Dictate keyboard. The Dictate app opens and starts listening.
+2. Swipe back to the app you were typing in. Dictate keeps listening in the background.
+3. Tap stop on the keyboard. The app sends the audio, and the keyboard types the clean text.
+4. For the next 10 minutes the app stays ready in the background (a "session"), so tapping the mic
+   again starts listening straight away without opening the app. Each dictation restarts the 10 minutes.
+
+While a session is alive the microphone session stays open, so iOS shows the orange microphone
+indicator. Audio is discarded (recorded to `/dev/null`) until the mic is tapped; nothing is saved or
+sent. The session ends after 10 minutes without a dictation (`SessionInfo.idleLimit`), on a phone call
+or other audio interruption, or with the **End session** button in the app.
+
+The two halves talk through a shared App Group folder (`Shared/Handoff.swift`). The keyboard needs
+**Allow Full Access** for that, and says so on screen if it is off. The keyboard never sees the token.
 
 ## What's here
 
-- `FamilyDictation.xcodeproj` — the Xcode project (SwiftUI, iOS 17+, no third-party packages)
+- `FamilyDictation.xcodeproj` — the Xcode project (SwiftUI + a UIKit keyboard, iOS 17+, no third-party packages)
 - `FamilyDictation/` — the app
   - `MainView.swift` — record button, "Listening…" / "Cleaning up…" states, result with Share
   - `SetupView.swift` — Worker address, family token, microphone permission
-  - `DictationModel.swift` — the state machine: record → send → copy to clipboard
+  - `DictationModel.swift` — the state machine: record → send → clipboard, and the keyboard handoff
   - `Recorder.swift` — `AVAudioRecorder` to a temp `.m4a` (AAC, 16 kHz, mono, ~32 kbps)
   - `DictationClient.swift` — the one `POST /dictate` call and its plain-language errors
   - `Settings.swift` — token in the Keychain, address in UserDefaults
   - `DictateIntent.swift` — the "Dictate" App Intent and shortcut
-- `FamilyDictationTests/` — unit tests for the network client (stubbed, no network needed)
+- `DictateKeyboard/` — the keyboard extension: mic button, globe, space, backspace, return
+- `Shared/` — code compiled into both: the App Group handoff between keyboard and app
+- `Config/` — Info.plist additions, entitlements, and `Base.xcconfig` with placeholder identifiers
+- `FamilyDictationTests/` — unit tests for the network client and the handoff (no network needed)
 
-Nothing personal is in the project: no Worker address, no token, no signing team. Each person types the
-address and their token into the setup screen. Keep it that way; this repo is public.
+Nothing personal is in the project: no Worker address, no token, no signing team, and only placeholder
+identifiers (`com.example.familydictation`). Each person types the address and their token into the
+setup screen. Keep it that way; this repo is public.
 
 ## Run it on your own iPhone
 
-1. Open `ios/FamilyDictation.xcodeproj` in Xcode.
-2. Click the blue **FamilyDictation** project at the top of the left sidebar, pick the **FamilyDictation**
-   target, then the **Signing & Capabilities** tab.
-3. Set **Team** to your own. A free Apple ID works: add it under Xcode → Settings → Accounts, then choose
-   "Your Name (Personal Team)".
-4. Change **Bundle Identifier** from `com.example.familydictation` to something unique to you, such as
-   `com.yourname.familydictation`.
-5. Plug in the iPhone, unlock it, and choose it as the run destination at the top of the Xcode window.
-   The first time, the phone asks you to trust the Mac and to turn on Developer Mode
-   (Settings → Privacy & Security → Developer Mode), which needs a restart.
-6. Press Run (⌘R). With a free Apple ID the phone then refuses to open the app until you trust yourself:
-   Settings → General → VPN & Device Management → your Apple ID → Trust.
-7. In the app's setup screen, enter the Worker address and your family token, and allow the microphone.
+The keyboard needs an App Group, so real identifiers and a signing team are required. They go in a
+file that git ignores, not in the project.
 
-Do not commit the Team or Bundle Identifier change. Before committing anything under `ios/`, run
-`git diff` and check that `DEVELOPMENT_TEAM` is still empty and the bundle id is still the placeholder.
+1. Copy `ios/Config/Local.xcconfig.example` to `ios/Local.xcconfig` and fill in your team ID, a bundle id
+   unique to you, and the matching `group.` id. `ios/Local.xcconfig` is gitignored.
+2. Open `ios/FamilyDictation.xcodeproj` in Xcode. Under Settings → Accounts, make sure your Apple ID is
+   signed in so Xcode can create the signing profiles.
+3. Plug in the iPhone, unlock it, and choose it as the run destination. The first time, the phone asks
+   you to trust the Mac and to turn on Developer Mode (Settings → Privacy & Security → Developer Mode).
+4. Press Run (⌘R). Or from `ios/`:
+   `xcodebuild -project FamilyDictation.xcodeproj -scheme FamilyDictation -destination 'generic/platform=iOS' -allowProvisioningUpdates build`
+5. In the app's setup screen, enter the Worker address and your family token, and allow the microphone.
+6. Add the keyboard: Settings → General → Keyboard → Keyboards → Add New Keyboard → **Dictate**.
+   Then tap **Dictate** in that list and turn on **Allow Full Access**.
 
-With a free Apple ID the app stops opening after 7 days; press Run again to renew it. A paid developer
-account ($99/yr) lasts a year per install and allows TestFlight for the rest of the family.
+Do not change the Team or Bundle Identifier in Xcode's Signing tab: that writes them into the project
+file. Before committing anything under `ios/`, run `git diff` and check that no team ID or real
+identifier appears.
 
 ## Put it on the Action Button
 
@@ -58,5 +80,18 @@ Use any simulator name that `xcrun simctl list devices available` shows.
 
 ## What the Simulator can't check
 
-Real microphone quality, the Action Button, and behaviour when the phone locks mid-recording all need a
-physical iPhone.
+Real microphone quality, the Action Button, opening the app from the keyboard, and recording in the
+background after swiping away all need a physical iPhone.
+
+## Fragile parts to re-test after each iOS update
+
+- **Opening the app from the keyboard.** Apple gives keyboards no public way to open another app.
+  `KeyboardViewController.openApp()` walks up to the application object and calls its open-URL method.
+  If a future iOS blocks this, the keyboard shows "Couldn't start. Open the Dictate app once, then try
+  again." after 5 seconds.
+- **Recording in the background.** Relies on the `audio` background mode and an active audio session.
+- **The background session.** iOS will not let an app open the microphone from the background, so the
+  app keeps it open on standby between dictations. If iOS suspends the app anyway, its heartbeat in the
+  App Group goes stale and the keyboard falls back to opening the app (after at most 1.5 seconds).
+- **The handoff.** If the app is closed mid-dictation, the keyboard gives up after 10 seconds (stop not
+  answered) or 90 seconds (cleanup not finished) rather than spinning forever.

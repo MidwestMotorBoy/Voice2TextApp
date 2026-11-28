@@ -9,7 +9,7 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 
 - `worker/` — Cloudflare Worker (`POST /dictate`): token check → Grok speech-to-text → Claude Haiku cleanup → clean text
 - `android/` — custom keyboard (InputMethodService) with one big mic button. Not started.
-- `ios/` — main app + Action Button intent, later a keyboard extension. Not started.
+- `ios/` — SwiftUI app (`FamilyDictation.xcodeproj`): record button + "Dictate" App Intent for the Action Button; result goes to the clipboard. Stage 1 built; keyboard extension not started.
 
 ## Hard rules
 
@@ -29,6 +29,10 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
   and the family token at setup time rather than hard-coding them.
 - Family tokens live in the `FAMILY_TOKENS` Worker secret and in `worker/family-tokens.local.json`
   (gitignored) on the owner's Mac.
+- iPhone Stage 1 builds and its unit tests pass on the iOS Simulator (2026-11-27). Not yet run on a
+  real iPhone: microphone recording and the Action Button are unverified.
+- The committed Xcode project has no signing team and a placeholder bundle id
+  (`com.example.familydictation`). Each person sets their own in Xcode and does not commit it.
 
 ## Working style
 
@@ -43,5 +47,9 @@ Worker (from `worker/`):
 - `npx wrangler dev` — run locally (put test secrets in `worker/.dev.vars`, gitignored)
 - `scripts/test-dictate.sh <audio.m4a>` — POST a recording to the Worker
 - `npx wrangler deploy` — deploy
+
+iPhone (from `ios/`):
+- `open FamilyDictation.xcodeproj` — open in Xcode; see `ios/README.md` for running on a phone
+- `xcodebuild -project FamilyDictation.xcodeproj -scheme FamilyDictation -destination 'platform=iOS Simulator,name=iPhone 17' test` — build and run unit tests
 
 Android (from `android/`, once it exists): `./gradlew assembleDebug`

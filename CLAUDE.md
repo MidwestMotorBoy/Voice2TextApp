@@ -9,7 +9,7 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 
 - `worker/` — Cloudflare Worker (`POST /dictate`): token check → Grok speech-to-text → Claude Haiku cleanup → clean text
 - `android/` — custom keyboard (InputMethodService) with one big mic button. Not started.
-- `ios/` — main app + Action Button intent, later a keyboard extension. Not started.
+- `ios/` — SwiftUI app (`FamilyDictation.xcodeproj`): record button + "Dictate" App Intent for the Action Button; result goes to the clipboard. Stage 1 built; keyboard extension not started.
 
 ## Hard rules
 
@@ -20,23 +20,36 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 - Don't log audio or transcript text. Only usage seconds are stored (KV).
 - Keep it simple: this is for a handful of family members, not a product.
 
-## Known unknowns (verify, don't assume)
+## Status
 
-- xAI speech-to-text REST request format: path (`/v1/stt`?), multipart field name (`file`?), model name.
-  Check https://docs.x.ai/developers/rest-api-reference/inference/voice before relying on `worker/src/index.js`.
-- The Worker code in this repo was written but never run. Treat it as a draft to test.
+- Worker is deployed and verified end to end on 2026-11-27 with real keys: Grok transcribes
+  (`POST /v1/stt`, multipart, `file` last, no `model` field, Bearer auth) and Claude cleans up.
+- Grok already strips "um"/"uh" by default; Claude handles self-corrections and the rest.
+- The Worker URL contains the owner's name, so it is kept out of this public repo. Apps take the URL
+  and the family token at setup time rather than hard-coding them.
+- Family tokens live in the `FAMILY_TOKENS` Worker secret and in `worker/family-tokens.local.json`
+  (gitignored) on the owner's Mac.
+- iPhone Stage 1 builds and its unit tests pass on the iOS Simulator (2026-11-27). The owner ran it on
+  a real iPhone the same day and confirmed dictation works. The Action Button is still unverified.
+- The committed Xcode project has no signing team and a placeholder bundle id
+  (`com.example.familydictation`). Each person sets their own in Xcode and does not commit it.
 
 ## Working style
 
-- One phase at a time: Worker → Android keyboard → iPhone Stage 1 → iPhone keyboard extension.
+- One phase at a time: Worker → iPhone Stage 1 → Android keyboard → iPhone keyboard extension.
 - Each phase ends with something testable on a real device or via curl.
 
 ## Commands
 
 Worker (from `worker/`):
 - `npm install` — installs wrangler locally
+- `npm test` — runs the Worker against fake Grok and Claude, no keys needed
 - `npx wrangler dev` — run locally (put test secrets in `worker/.dev.vars`, gitignored)
 - `scripts/test-dictate.sh <audio.m4a>` — POST a recording to the Worker
 - `npx wrangler deploy` — deploy
+
+iPhone (from `ios/`):
+- `open FamilyDictation.xcodeproj` — open in Xcode; see `ios/README.md` for running on a phone
+- `xcodebuild -project FamilyDictation.xcodeproj -scheme FamilyDictation -destination 'platform=iOS Simulator,name=iPhone 17' test` — build and run unit tests
 
 Android (from `android/`, once it exists): `./gradlew assembleDebug`

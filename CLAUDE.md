@@ -8,7 +8,7 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 ## Layout
 
 - `worker/` — Cloudflare Worker (`POST /dictate`): token check → Grok speech-to-text → Claude Haiku cleanup → clean text
-- `android/` — custom keyboard (InputMethodService) with one big mic button. Not started.
+- `android/` — Kotlin keyboard app (InputMethodService) with one big mic button, plus a setup Activity. No third-party libraries. Records and uploads from the keyboard itself (no app handoff like iOS).
 - `ios/` — SwiftUI app (`FamilyDictation.xcodeproj`): record button + "Dictate" App Intent (Stage 1), and a keyboard extension `DictateKeyboard/` that hands off to the app through an App Group (Stage 2). `Shared/` is compiled into both; `Config/` holds plists, entitlements and `Base.xcconfig`.
 
 ## Hard rules
@@ -40,6 +40,10 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 - The app keeps a 10-minute background "session" (microphone on standby, audio discarded) so later
   keyboard taps start a dictation without opening the app. Verified in the Simulator only; the
   Simulator does not enforce background limits, so this still needs confirming on a real iPhone.
+- Android keyboard builds and its unit tests pass (2026-11-27). It has never been run on a phone or
+  emulator. The committed applicationId is the placeholder `com.example.familydictation`; a real one
+  goes in `android/local.properties` (`appId=`, gitignored). Family APKs are debug-signed on the
+  owner's Mac, and updates must be signed with that same key.
 
 ## Working style
 
@@ -60,4 +64,5 @@ iPhone (from `ios/`):
 - `xcodebuild -project FamilyDictation.xcodeproj -scheme FamilyDictation -destination 'platform=iOS Simulator,name=iPhone 17' test` — build and run unit tests
 - `xcodebuild -project FamilyDictation.xcodeproj -scheme FamilyDictation -destination 'generic/platform=iOS' -allowProvisioningUpdates build` — signed build for a phone (needs `ios/Local.xcconfig`)
 
-Android (from `android/`, once it exists): `./gradlew assembleDebug`
+Android (from `android/`; needs JDK 17 and `sdk.dir` in `android/local.properties`):
+- `./gradlew test assembleDebug` — unit tests and the debug APK (`app/build/outputs/apk/debug/`)

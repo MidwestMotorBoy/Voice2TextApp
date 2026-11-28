@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dictate</string>
+
+    <string name="status_idle">Tap to dictate</string>
+    <string name="status_listening">Listening… tap to stop</string>
+    <string name="status_cleaning">Cleaning up…</string>
+
+    <string name="error_setup">Open the Dictate app and finish setup</string>
+    <string name="error_mic">Microphone is off. Open the Dictate app to allow it.</string>
+    <string name="error_start">Couldn\'t start recording, try again</string>
+    <string name="error_empty">Didn\'t catch that, try again</string>
+
+    <string name="key_space">space</string>
+    <string name="key_switch">Switch keyboard</string>
+    <string name="key_delete">Delete</string>
+    <string name="key_enter">Enter</string>
+    <string name="mic_start">Start dictating</string>
+    <string name="mic_stop">Stop</string>
+
+    <string name="setup_address_label">Worker address</string>
+    <string name="setup_address_hint">your-worker.workers.dev</string>
+    <string name="setup_address_help">The web address you were given for the family dictation service.</string>
+    <string name="setup_token_label">Family token</string>
+    <string name="setup_token_hint">Paste your token</string>
+    <string name="setup_token_help">Your personal token. It stays on this phone.</string>
+    <string name="setup_save">Save</string>
+    <string name="setup_saved">Saved</string>
+    <string name="setup_incomplete">Enter both the address and the token</string>
+    <string name="setup_mic_allow">1. Allow microphone</string>
+    <string name="setup_mic_allowed">1. Microphone allowed ✓</string>
+    <string name="setup_enable">2. Turn on the Dictate keyboard</string>
+    <string name="setup_enabled">2. Dictate keyboard is on ✓</string>
+    <string name="setup_choose">3. Switch to the Dictate keyboard</string>
+    <string name="setup_try_label">Try it here</string>
+    <string name="setup_try_hint">Tap here, then tap the mic and talk</string>
+</resources>

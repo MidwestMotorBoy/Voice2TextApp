@@ -20,12 +20,15 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 - Don't log audio or transcript text. Only usage seconds are stored (KV).
 - Keep it simple: this is for a handful of family members, not a product.
 
-## Known unknowns (verify, don't assume)
+## Status
 
-- xAI speech-to-text format was checked against the docs on 2026-11-27 (`POST /v1/stt`, multipart,
-  `file` last, no `model` field, response has `text` and `duration`). The Bearer auth header is
-  inferred from xAI's other endpoints, and nothing has been tried with a real key yet.
-- The Worker passes `npm test` (fake Grok and Claude) but has never run against the real APIs or been deployed.
+- Worker is deployed and verified end to end on 2026-11-27 with real keys: Grok transcribes
+  (`POST /v1/stt`, multipart, `file` last, no `model` field, Bearer auth) and Claude cleans up.
+- Grok already strips "um"/"uh" by default; Claude handles self-corrections and the rest.
+- The Worker URL contains the owner's name, so it is kept out of this public repo. Apps take the URL
+  and the family token at setup time rather than hard-coding them.
+- Family tokens live in the `FAMILY_TOKENS` Worker secret and in `worker/family-tokens.local.json`
+  (gitignored) on the owner's Mac.
 
 ## Working style
 

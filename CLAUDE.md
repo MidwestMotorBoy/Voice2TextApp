@@ -29,8 +29,8 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
   and the family token at setup time rather than hard-coding them.
 - Family tokens live in the `FAMILY_TOKENS` Worker secret and in `worker/family-tokens.local.json`
   (gitignored) on the owner's Mac.
-- iPhone Stage 1 builds and its unit tests pass on the iOS Simulator (2026-11-27). Not yet run on a
-  real iPhone: microphone recording and the Action Button are unverified.
+- iPhone Stage 1 builds and its unit tests pass on the iOS Simulator (2026-11-27). The owner ran it on
+  a real iPhone the same day and confirmed dictation works. The Action Button is still unverified.
 - The committed Xcode project has no signing team and a placeholder bundle id
   (`com.example.familydictation`). Each person sets their own in Xcode and does not commit it.
 

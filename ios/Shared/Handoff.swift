@@ -51,7 +51,28 @@ struct HandoffState: Codable, Equatable {
     }
 }
 
-/// Two small files in the shared container: the app's state, and the keyboard's "stop" request.
+/// The app's background "session": while it is alive the keyboard can start a dictation
+/// without opening the app. The app refreshes `heartbeat` every couple of seconds.
+struct SessionInfo: Codable, Equatable {
+    var heartbeat: Date
+    var endsAt: Date
+
+    /// How long a session lasts with no dictation.
+    static let idleLimit: TimeInterval = 10 * 60
+    /// How often the app refreshes the heartbeat.
+    static let heartbeatInterval: TimeInterval = 2
+    /// A heartbeat older than this means the app is gone (closed, suspended or interrupted).
+    static let heartbeatTimeout: TimeInterval = 6
+    /// How long the keyboard waits for a live session to start listening before opening the app instead.
+    static let startAckTimeout: TimeInterval = 1.5
+
+    func isAlive(now: Date = Date()) -> Bool {
+        now < endsAt && now.timeIntervalSince(heartbeat) < Self.heartbeatTimeout
+    }
+}
+
+/// A few small files in the shared container: the app's state, its session heartbeat,
+/// and the keyboard's "start" and "stop" requests.
 /// The transcript is only here between the app finishing and the keyboard typing it in.
 struct HandoffStore {
     let directory: URL
@@ -62,6 +83,9 @@ struct HandoffStore {
 
     private var stateURL: URL { directory.appendingPathComponent("handoff-state.json") }
     private var stopURL: URL { directory.appendingPathComponent("handoff-stop") }
+
+    private var startURL: URL { directory.appendingPathComponent("handoff-start") }
+    private var sessionURL: URL { directory.appendingPathComponent("handoff-session.json") }
 
     func read() -> HandoffState {
         guard let data = try? Data(contentsOf: stateURL),
@@ -74,9 +98,43 @@ struct HandoffStore {
         try? data.write(to: stateURL, options: .atomic)
     }
 
+    /// Clears the result and any pending requests. The session heartbeat is left alone.
     func clear() {
         try? FileManager.default.removeItem(at: stateURL)
         try? FileManager.default.removeItem(at: stopURL)
+        try? FileManager.default.removeItem(at: startURL)
+    }
+
+    // MARK: Session heartbeat (written by the app, read by the keyboard)
+
+    func session() -> SessionInfo? {
+        guard let data = try? Data(contentsOf: sessionURL) else { return nil }
+        return try? JSONDecoder().decode(SessionInfo.self, from: data)
+    }
+
+    func writeSession(_ info: SessionInfo) {
+        guard let data = try? JSONEncoder().encode(info) else { return }
+        try? data.write(to: sessionURL, options: .atomic)
+    }
+
+    func clearSession() {
+        try? FileManager.default.removeItem(at: sessionURL)
+    }
+
+    /// Keyboard → app: start a dictation in the background (only useful while a session is alive).
+    func requestStart() {
+        try? Data().write(to: startURL, options: .atomic)
+    }
+
+    /// App: true once per start request.
+    func consumeStartRequest() -> Bool {
+        guard FileManager.default.fileExists(atPath: startURL.path) else { return false }
+        try? FileManager.default.removeItem(at: startURL)
+        return true
+    }
+
+    func clearStartRequest() {
+        try? FileManager.default.removeItem(at: startURL)
     }
 
     /// Keyboard → app: please stop recording and send.
@@ -101,6 +159,7 @@ struct HandoffStore {
 enum HandoffSignal: String {
     case stateChanged = "state-changed"
     case stopRequested = "stop-requested"
+    case startRequested = "start-requested"
 
     private var darwinName: CFString? {
         AppGroup.id.map { "\($0).\(rawValue)" as CFString }

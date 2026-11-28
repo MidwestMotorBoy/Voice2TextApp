@@ -11,6 +11,13 @@ iOS keyboards are not allowed to use the microphone, so the keyboard and the app
 1. Tap the mic on the Dictate keyboard. The Dictate app opens and starts listening.
 2. Swipe back to the app you were typing in. Dictate keeps listening in the background.
 3. Tap stop on the keyboard. The app sends the audio, and the keyboard types the clean text.
+4. For the next 10 minutes the app stays ready in the background (a "session"), so tapping the mic
+   again starts listening straight away without opening the app. Each dictation restarts the 10 minutes.
+
+While a session is alive the microphone session stays open, so iOS shows the orange microphone
+indicator. Audio is discarded (recorded to `/dev/null`) until the mic is tapped; nothing is saved or
+sent. The session ends after 10 minutes without a dictation (`SessionInfo.idleLimit`), on a phone call
+or other audio interruption, or with the **End session** button in the app.
 
 The two halves talk through a shared App Group folder (`Shared/Handoff.swift`). The keyboard needs
 **Allow Full Access** for that, and says so on screen if it is off. The keyboard never sees the token.
@@ -83,5 +90,8 @@ background after swiping away all need a physical iPhone.
   If a future iOS blocks this, the keyboard shows "Couldn't start. Open the Dictate app once, then try
   again." after 5 seconds.
 - **Recording in the background.** Relies on the `audio` background mode and an active audio session.
+- **The background session.** iOS will not let an app open the microphone from the background, so the
+  app keeps it open on standby between dictations. If iOS suspends the app anyway, its heartbeat in the
+  App Group goes stale and the keyboard falls back to opening the app (after at most 1.5 seconds).
 - **The handoff.** If the app is closed mid-dictation, the keyboard gives up after 10 seconds (stop not
   answered) or 90 seconds (cleanup not finished) rather than spinning forever.

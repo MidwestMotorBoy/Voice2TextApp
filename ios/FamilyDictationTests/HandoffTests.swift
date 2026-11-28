@@ -70,4 +70,48 @@ final class HandoffTests: XCTestCase {
         XCTAssertEqual(result.phase, .idle)
         XCTAssertNil(result.text)
     }
+
+    // MARK: Background session
+
+    private func session(heartbeatAge: TimeInterval, endsIn: TimeInterval) -> SessionInfo {
+        SessionInfo(heartbeat: Date().addingTimeInterval(-heartbeatAge), endsAt: Date().addingTimeInterval(endsIn))
+    }
+
+    func testNoSessionFileMeansNoSession() {
+        XCTAssertNil(store.session())
+    }
+
+    func testSessionRoundTripsAndSurvivesClearingAResult() {
+        let info = session(heartbeatAge: 0, endsIn: 600)
+        store.writeSession(info)
+        store.write(state(.done, age: 0, text: "words"))
+
+        store.clear()
+
+        XCTAssertEqual(store.session()?.isAlive(), true)
+        store.clearSession()
+        XCTAssertNil(store.session())
+    }
+
+    func testSessionWithFreshHeartbeatIsAlive() {
+        XCTAssertTrue(session(heartbeatAge: 1, endsIn: 300).isAlive())
+    }
+
+    func testSessionWithStaleHeartbeatIsDeadSoTheKeyboardOpensTheApp() {
+        XCTAssertFalse(session(heartbeatAge: SessionInfo.heartbeatTimeout + 1, endsIn: 300).isAlive())
+    }
+
+    func testSessionPastItsEndIsDeadEvenWithAFreshHeartbeat() {
+        XCTAssertFalse(session(heartbeatAge: 0, endsIn: -1).isAlive())
+    }
+
+    func testStartRequestIsSeenExactlyOnceAndClearedWithTheResult() {
+        store.requestStart()
+        XCTAssertTrue(store.consumeStartRequest())
+        XCTAssertFalse(store.consumeStartRequest())
+
+        store.requestStart()
+        store.clear()
+        XCTAssertFalse(store.consumeStartRequest())
+    }
 }

@@ -35,9 +35,11 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
   (`com.example.familydictation`, `group.com.example.familydictation`) in `ios/Config/Base.xcconfig`.
   Real team ID, bundle id and App Group id go in `ios/Local.xcconfig` (gitignored). Never set them in
   Xcode's Signing tab and never write them in code: the App Group id is read from Info.plist.
-- iPhone Stage 2 (keyboard) builds and its unit tests pass on the iOS Simulator (2026-11-27). The app
-  side of the handoff was exercised in the Simulator. Not yet verified on a real iPhone: opening the app
-  from the keyboard, background recording, and the text being typed in.
+- iPhone Stage 2 (keyboard) builds and its unit tests pass on the iOS Simulator (2026-11-27). The owner
+  confirmed on a real iPhone (iOS 27.2) that the keyboard mic opens the app.
+- The app keeps a 10-minute background "session" (microphone on standby, audio discarded) so later
+  keyboard taps start a dictation without opening the app. Verified in the Simulator only; the
+  Simulator does not enforce background limits, so this still needs confirming on a real iPhone.
 
 ## Working style
 

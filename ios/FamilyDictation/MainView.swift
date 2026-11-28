@@ -41,6 +41,10 @@ struct MainView: View {
                     resultCard(text)
                 }
 
+                if model.sessionEndsAt != nil, model.phase == .idle {
+                    sessionCard
+                }
+
                 Spacer(minLength: 0)
             }
             .padding()
@@ -118,6 +122,26 @@ struct MainView: View {
                     .foregroundStyle(.green)
             }
         }
+    }
+
+    /// Shown while the app is staying ready in the background for the keyboard.
+    private var sessionCard: some View {
+        VStack(spacing: 10) {
+            Text("Ready in the background for \(Int(SessionInfo.idleLimit / 60)) minutes. Tap the keyboard mic any time.")
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+            Text("The microphone stays on standby; nothing is saved or sent until you tap the mic.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("End session", role: .destructive) {
+                model.endSession()
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func resultCard(_ text: String) -> some View {

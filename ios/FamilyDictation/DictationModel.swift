@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Observation
 import UIKit
@@ -6,8 +7,14 @@ import UIKit
 /// Never logs audio or transcript text.
 ///
 /// A dictation can be started in the app (button or Action Button), in which case the
-/// result goes to the clipboard, or by the keyboard, in which case recording continues
-/// in the background and the result is also handed back to the keyboard to type in.
+/// result goes to the clipboard, or by the keyboard, in which case the result is also
+/// handed back to the keyboard to type in.
+///
+/// The first keyboard dictation opens the app and starts a background "session": the
+/// microphone session stays open (audio discarded) so the app stays alive and later
+/// keyboard taps can start a dictation without opening the app. The session ends after
+/// `SessionInfo.idleLimit` with no dictation, on an interruption such as a phone call,
+/// or when the person taps End session.
 @MainActor
 @Observable
 final class DictationModel {
@@ -22,24 +29,39 @@ final class DictationModel {
     private(set) var errorMessage: String?
     /// True while the current dictation was started from the keyboard.
     private(set) var keyboardSession = false
+    /// When the background session ends if nothing is dictated; nil when there is no session.
+    private(set) var sessionEndsAt: Date?
     var showSetup = false
 
     private let recorder = Recorder()
     private let client = DictationClient()
     private let handoff = HandoffStore.shared
     private var autoStop: Task<Void, Never>?
-    private var stopWatcher: Task<Void, Never>?
+    private var sessionLoop: Task<Void, Never>?
 
     private init() {
         // Anything left over from a previous run of the app is no longer true.
         handoff?.clear()
-        HandoffSignal.stopRequested.startListening()
+        handoff?.clearSession()
+
+        for signal in [HandoffSignal.stopRequested, .startRequested] {
+            signal.startListening()
+            NotificationCenter.default.addObserver(
+                forName: signal.localName, object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in await self?.checkKeyboardRequests() }
+            }
+        }
         NotificationCenter.default.addObserver(
-            forName: HandoffSignal.stopRequested.localName, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in await self?.checkStopRequest() }
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            guard raw == AVAudioSession.InterruptionType.began.rawValue else { return }
+            Task { @MainActor in await self?.audioInterrupted() }
         }
     }
+
+    // MARK: Dictation
 
     func toggle() async {
         switch phase {
@@ -80,12 +102,11 @@ final class DictationModel {
         if keyboardSession {
             handoff?.clearStopRequest()
             tellKeyboard(.listening)
-            stopWatcher = Task { [weak self] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(300))
-                    await self?.checkStopRequest()
-                }
-            }
+            beginSession()
+        } else {
+            // A dictation started in the app closes the microphone when it finishes,
+            // so any background session is over.
+            endSession(closeMicrophone: false)
         }
 
         autoStop = Task { [weak self] in
@@ -95,18 +116,10 @@ final class DictationModel {
         }
     }
 
-    /// The keyboard asked us to stop (it can't reach the app any other way).
-    private func checkStopRequest() async {
-        guard keyboardSession, phase == .listening, handoff?.consumeStopRequest() == true else { return }
-        await stopAndSend()
-    }
-
     func stopAndSend() async {
         guard phase == .listening else { return }
         autoStop?.cancel()
         autoStop = nil
-        stopWatcher?.cancel()
-        stopWatcher = nil
         startedAt = nil
 
         // Keeps the app alive long enough to upload when it is in the background.
@@ -119,10 +132,12 @@ final class DictationModel {
             if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask) }
         }
 
-        guard let recording = recorder.stop() else {
+        // While a session is alive the microphone goes back to standby instead of closing.
+        guard let recording = recorder.stop(keepSessionActive: sessionEndsAt != nil) else {
             finish(error: "Didn't work, try again")
             return
         }
+        extendSession()
         defer { try? FileManager.default.removeItem(at: recording.file) }
 
         guard recording.seconds >= 0.5, let audio = try? Data(contentsOf: recording.file), !audio.isEmpty else {
@@ -167,5 +182,73 @@ final class DictationModel {
     private func tellKeyboard(_ phase: HandoffState.Phase, text: String? = nil, message: String? = nil) {
         handoff?.write(HandoffState(phase: phase, text: text, message: message, updatedAt: Date()))
         HandoffSignal.stateChanged.post()
+    }
+
+    // MARK: Background session
+
+    /// Starts the session if there isn't one, and the loop that keeps the keyboard informed.
+    private func beginSession() {
+        extendSession(startingIfNeeded: true)
+        guard sessionLoop == nil else { return }
+        sessionLoop = Task { [weak self] in
+            var lastHeartbeat = Date.distantPast
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard let self, !Task.isCancelled else { return }
+                // Not awaited: an upload must not hold up the heartbeat.
+                Task { await self.checkKeyboardRequests() }
+                if Date().timeIntervalSince(lastHeartbeat) >= SessionInfo.heartbeatInterval {
+                    lastHeartbeat = Date()
+                    self.sessionTick()
+                }
+            }
+        }
+    }
+
+    private func extendSession(startingIfNeeded: Bool = false) {
+        guard startingIfNeeded || sessionEndsAt != nil else { return }
+        let endsAt = Date().addingTimeInterval(SessionInfo.idleLimit)
+        sessionEndsAt = endsAt
+        handoff?.writeSession(SessionInfo(heartbeat: Date(), endsAt: endsAt))
+    }
+
+    /// Every couple of seconds: refresh the heartbeat, or end the session if it ran out
+    /// or the microphone stopped underneath us.
+    private func sessionTick() {
+        guard let endsAt = sessionEndsAt else { return }
+        let busy = phase != .idle
+        if !busy, Date() >= endsAt || !recorder.isKeepingAlive {
+            endSession()
+            return
+        }
+        handoff?.writeSession(SessionInfo(heartbeat: Date(), endsAt: endsAt))
+    }
+
+    /// Ends the background session. Closing the microphone removes the orange indicator.
+    func endSession(closeMicrophone: Bool = true) {
+        guard sessionEndsAt != nil || sessionLoop != nil else { return }
+        sessionLoop?.cancel()
+        sessionLoop = nil
+        sessionEndsAt = nil
+        handoff?.clearSession()
+        handoff?.clearStartRequest()
+        if closeMicrophone, phase == .idle { recorder.endStandby() }
+    }
+
+    /// The keyboard can't call the app directly; it leaves a request and we pick it up.
+    private func checkKeyboardRequests() async {
+        guard let handoff else { return }
+        if phase == .listening, keyboardSession, handoff.consumeStopRequest() {
+            await stopAndSend()
+        } else if phase == .idle, sessionEndsAt != nil, handoff.consumeStartRequest() {
+            await start(fromKeyboard: true)
+        }
+    }
+
+    /// A phone call or similar took the microphone. Send what we have and end the session:
+    /// iOS will not let the app re-open the microphone from the background.
+    private func audioInterrupted() async {
+        if phase == .listening { await stopAndSend() }
+        endSession()
     }
 }

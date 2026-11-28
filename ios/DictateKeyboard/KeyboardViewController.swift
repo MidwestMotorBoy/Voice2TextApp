@@ -3,7 +3,8 @@ import UIKit
 /// The Dictate keyboard: one big mic button plus globe, space, backspace and return.
 ///
 /// iOS keyboards cannot use the microphone, so tapping the mic opens the main app,
-/// which records in the background. Tapping stop asks the app to send the audio;
+/// which records in the background. After that first time the app stays ready for a
+/// while, and the mic just signals it. Tapping stop asks the app to send the audio;
 /// the cleaned-up text comes back through the shared App Group and is typed in here.
 /// Nothing is logged, and the shared result is cleared as soon as it is inserted.
 final class KeyboardViewController: UIInputViewController {
@@ -23,6 +24,8 @@ final class KeyboardViewController: UIInputViewController {
     private var display: Display = .idle(message: nil)
     private var pollTimer: Timer?
     private var openDeadline: Date?
+    /// Set while waiting for a live background session to start listening.
+    private var startDeadline: Date?
     private var stopRequestedAt: Date?
     private var lastMessage: String?
     private var signalObserver: NSObjectProtocol?
@@ -89,10 +92,12 @@ final class KeyboardViewController: UIInputViewController {
 
         case .cleaningUp:
             openDeadline = nil
+            startDeadline = nil
             show(.cleaningUp)
 
         case .listening:
             openDeadline = nil
+            startDeadline = nil
             if let requested = stopRequestedAt {
                 if now.timeIntervalSince(requested) > 10 {
                     // The app never answered the stop request (it was probably closed).
@@ -109,7 +114,16 @@ final class KeyboardViewController: UIInputViewController {
 
         case .idle:
             stopRequestedAt = nil
-            if let deadline = openDeadline {
+            if let deadline = startDeadline {
+                if now > deadline {
+                    // The session didn't answer (the app was closed or suspended): open the app instead.
+                    startDeadline = nil
+                    store.clearStartRequest()
+                    openDeadline = now.addingTimeInterval(5)
+                    openApp()
+                }
+                show(.opening)
+            } else if let deadline = openDeadline {
                 if now > deadline {
                     openDeadline = nil
                     lastMessage = "Couldn't start. Open the Dictate app once, then try again."
@@ -125,6 +139,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func resetPending() {
         openDeadline = nil
+        startDeadline = nil
         stopRequestedAt = nil
     }
 
@@ -148,7 +163,7 @@ final class KeyboardViewController: UIInputViewController {
             statusLabel.text = message ?? "Tap to dictate"
             if message != nil { statusLabel.textColor = .systemRed }
         case .opening:
-            statusLabel.text = "Opening Dictate…"
+            statusLabel.text = "Starting…"
             color = .systemGray
             busy = true
             enabled = false
@@ -178,8 +193,15 @@ final class KeyboardViewController: UIInputViewController {
         case .idle:
             lastMessage = nil
             store.clear()
-            openDeadline = Date().addingTimeInterval(5)
-            openApp()
+            if store.session()?.isAlive() == true {
+                // The app is ready in the background: ask it to start, no app switch needed.
+                startDeadline = Date().addingTimeInterval(SessionInfo.startAckTimeout)
+                store.requestStart()
+                HandoffSignal.startRequested.post()
+            } else {
+                openDeadline = Date().addingTimeInterval(5)
+                openApp()
+            }
             refresh()
         case .listening:
             stopRequestedAt = Date()

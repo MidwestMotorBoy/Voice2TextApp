@@ -24,3 +24,6 @@ xcuserdata/
 
 # Local family tokens (never commit)
 family-tokens.local.json
+
+# Local iOS signing identifiers (never commit)
+ios/Local.xcconfig

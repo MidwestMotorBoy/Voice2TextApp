@@ -64,10 +64,16 @@ struct MainView: View {
                 if !Settings.isConfigured { model.showSetup = true }
             }
             .onChange(of: scenePhase) { _, newPhase in
-                // Recording can't continue in the background, so send what we have.
-                if newPhase == .background, model.phase == .listening {
+                // A dictation started in the app has no stop button once the app is hidden,
+                // so send what we have. One started from the keyboard keeps recording.
+                if newPhase == .background, model.phase == .listening, !model.keyboardSession {
                     Task { await model.stopAndSend() }
                 }
+            }
+            .onOpenURL { url in
+                // The keyboard opens familydictation://record to start a dictation.
+                guard url.scheme == "familydictation", url.host == "record" else { return }
+                Task { await model.start(fromKeyboard: true) }
             }
         }
     }
@@ -91,9 +97,12 @@ struct MainView: View {
                         .font(.title3.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
-                Text("Tap to stop")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Text(model.keyboardSession
+                     ? "Swipe back to your app, then tap stop on the keyboard"
+                     : "Tap to stop")
+                    .font(model.keyboardSession ? .headline : .subheadline)
+                    .foregroundStyle(model.keyboardSession ? .primary : .secondary)
+                    .padding(.top, model.keyboardSession ? 8 : 0)
             }
         case .starting:
             Text("Starting…")

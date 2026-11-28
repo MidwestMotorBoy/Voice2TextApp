@@ -9,7 +9,7 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
 
 - `worker/` — Cloudflare Worker (`POST /dictate`): token check → Grok speech-to-text → Claude Haiku cleanup → clean text
 - `android/` — custom keyboard (InputMethodService) with one big mic button. Not started.
-- `ios/` — SwiftUI app (`FamilyDictation.xcodeproj`): record button + "Dictate" App Intent for the Action Button; result goes to the clipboard. Stage 1 built; keyboard extension not started.
+- `ios/` — SwiftUI app (`FamilyDictation.xcodeproj`): record button + "Dictate" App Intent (Stage 1), and a keyboard extension `DictateKeyboard/` that hands off to the app through an App Group (Stage 2). `Shared/` is compiled into both; `Config/` holds plists, entitlements and `Base.xcconfig`.
 
 ## Hard rules
 
@@ -31,8 +31,13 @@ Full plan: `docs/plan.md`. Read it before starting a new phase.
   (gitignored) on the owner's Mac.
 - iPhone Stage 1 builds and its unit tests pass on the iOS Simulator (2026-11-27). The owner ran it on
   a real iPhone the same day and confirmed dictation works. The Action Button is still unverified.
-- The committed Xcode project has no signing team and a placeholder bundle id
-  (`com.example.familydictation`). Each person sets their own in Xcode and does not commit it.
+- The committed Xcode project has no signing team and only placeholder identifiers
+  (`com.example.familydictation`, `group.com.example.familydictation`) in `ios/Config/Base.xcconfig`.
+  Real team ID, bundle id and App Group id go in `ios/Local.xcconfig` (gitignored). Never set them in
+  Xcode's Signing tab and never write them in code: the App Group id is read from Info.plist.
+- iPhone Stage 2 (keyboard) builds and its unit tests pass on the iOS Simulator (2026-11-27). The app
+  side of the handoff was exercised in the Simulator. Not yet verified on a real iPhone: opening the app
+  from the keyboard, background recording, and the text being typed in.
 
 ## Working style
 
@@ -51,5 +56,6 @@ Worker (from `worker/`):
 iPhone (from `ios/`):
 - `open FamilyDictation.xcodeproj` — open in Xcode; see `ios/README.md` for running on a phone
 - `xcodebuild -project FamilyDictation.xcodeproj -scheme FamilyDictation -destination 'platform=iOS Simulator,name=iPhone 17' test` — build and run unit tests
+- `xcodebuild -project FamilyDictation.xcodeproj -scheme FamilyDictation -destination 'generic/platform=iOS' -allowProvisioningUpdates build` — signed build for a phone (needs `ios/Local.xcconfig`)
 
 Android (from `android/`, once it exists): `./gradlew assembleDebug`

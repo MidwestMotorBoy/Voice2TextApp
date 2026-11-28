@@ -1,0 +1,8 @@
+// Identifiers for the app, its keyboard and their shared App Group.
+// These are neutral placeholders. To build for a real phone, copy
+// Local.xcconfig.example to ios/Local.xcconfig (gitignored) and put your own values there.
+APP_BUNDLE_ID = com.example.familydictation
+APP_GROUP_ID = group.com.example.familydictation
+DEVELOPMENT_TEAM =
+
+#include? "../Local.xcconfig"
